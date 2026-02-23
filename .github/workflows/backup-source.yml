@@ -1,0 +1,66 @@
+name: Backup Source Code
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # تمام تاریخچه git
+    
+    - name: Create backup archive
+      run: |
+        BACKUP_NAME="signalo-backup-$(date +%Y%m%d-%H%M%S).zip"
+        echo "BACKUP_NAME=${BACKUP_NAME}" >> $GITHUB_ENV
+        
+        # ساخت آرشیو از سورس کد
+        zip -r ${BACKUP_NAME} . -x "*.git*" "build/*" ".dart_tool/*" ".idea/*"
+        
+        # اطلاعات بکاپ
+        BACKUP_SIZE=$(du -h ${BACKUP_NAME} | cut -f1)
+        echo "BACKUP_SIZE=${BACKUP_SIZE}" >> $GITHUB_ENV
+        
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        echo "COMMIT_COUNT=${COMMIT_COUNT}" >> $GITHUB_ENV
+        
+        LAST_COMMIT=$(git log -1 --pretty=%B)
+        echo "LAST_COMMIT<<EOF" >> $GITHUB_ENV
+        echo "${LAST_COMMIT}" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+    
+    - name: Send backup to Telegram Channel
+      env:
+        TELEGRAM_BOT_TOKEN: "8312138474:AAHSLslHtfLEwRM-oKae-YOuxpMEKKJo5Hs"
+        TELEGRAM_CHAT_ID: "-1003591352604"
+      run: |
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        
+        curl -F chat_id="${TELEGRAM_CHAT_ID}" \
+             -F document=@"${BACKUP_NAME}" \
+             -F caption="💾 Signalo Source Code Backup
+        
+        📦 File: ${BACKUP_NAME}
+        📊 Size: ${BACKUP_SIZE}
+        🌿 Branch: ${BRANCH}
+        🔨 Commit: ${COMMIT_HASH}
+        📝 Total Commits: ${COMMIT_COUNT}
+        
+        💬 Last Commit:
+        ${LAST_COMMIT}
+        
+        ✅ Backup created successfully!" \
+             https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument
+    
+    - name: Upload backup artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-backup
+        path: ${{ env.BACKUP_NAME }}
+        retention-days: 30

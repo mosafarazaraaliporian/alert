@@ -1,0 +1,65 @@
+name: Build and Deploy APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.38.9'
+        channel: 'stable'
+    
+    - name: Get dependencies
+      run: flutter pub get
+    
+    - name: Build APK
+      run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
+    
+    - name: Get APK name
+      id: apk_name
+      run: |
+        echo "APK_PATH=$(find build/app/outputs/flutter-apk -name 'app-release.apk' | head -n 1)" >> $GITHUB_OUTPUT
+        echo "APK_NAME=signalo-release.apk" >> $GITHUB_OUTPUT
+    
+    - name: Send APK to Telegram
+      env:
+        TELEGRAM_BOT_TOKEN: "8312138474:AAHSLslHtfLEwRM-oKae-YOuxpMEKKJo5Hs"
+        TELEGRAM_CHAT_ID: "7053561971"
+      run: |
+        APK_FILE="${{ steps.apk_name.outputs.APK_PATH }}"
+        COMMIT_MSG=$(git log -1 --pretty=%B)
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        
+        curl -F chat_id="${TELEGRAM_CHAT_ID}" \
+             -F document=@"${APK_FILE}" \
+             -F caption="🚀 Signalo APK Build
+        
+        📱 Version: Release
+        🔨 Commit: ${COMMIT_HASH}
+        💬 Message: ${COMMIT_MSG}
+        
+        ✅ Build successful!" \
+             https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument
+    
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: signalo-release-apk
+        path: ${{ steps.apk_name.outputs.APK_PATH }}
