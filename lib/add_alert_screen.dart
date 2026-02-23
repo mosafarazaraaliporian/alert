@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class AddAlertScreen extends StatefulWidget {
   const AddAlertScreen({super.key});
@@ -39,40 +40,48 @@ class _AddAlertScreenState extends State<AddAlertScreen> {
       _isLoading = true;
     });
 
-    // Get user data from SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final chatId = prefs.getString('chat_id') ?? '';
-    final fcmToken = prefs.getString('fcm_token') ?? '';
-    final deviceId = prefs.getString('device_id') ?? '';
+    try {
+      // Get chat_id from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final chatId = prefs.getString('chat_id');
 
-    // Prepare data to send to server
-    final data = {
-      'chat_id': chatId,
-      'fcm_token': fcmToken,
-      'device_id': deviceId,
-      'coin_name': _coinNameController.text.trim(),
-      'target_price': _priceController.text.trim(),
-    };
+      if (chatId == null) {
+        throw Exception('Chat ID not found. Please register again.');
+      }
 
-    print('Data to send to server: $data');
-
-    // TODO: Send data to server here
-    // Example: await http.post('your-api-url', body: data);
-
-    await Future.delayed(const Duration(seconds: 1)); // Simulate API call
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Alert created successfully'),
-          backgroundColor: Colors.green,
-        ),
+      // Create alert via API
+      final response = await ApiService.createAlert(
+        chatId: chatId,
+        coinName: _coinNameController.text.trim(),
+        targetPrice: double.parse(_priceController.text.trim()),
       );
-      Navigator.of(context).pop();
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Alert created: ${response['symbol']} at ${response['target_price']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop(true); // Return true to refresh home screen
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create alert: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

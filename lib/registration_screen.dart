@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:async';
 import 'home_screen.dart';
+import 'api_service.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -141,43 +142,71 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
+    if (_fcmToken == null || _fcmToken!.contains('Error')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('FCM Token not available. Please restart the app.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
-    // Send data to server
-    final data = {
-      'chat_id': _chatIdController.text.trim(),
-      'fcm_token': _fcmToken,
-      'device_id': _deviceId,
-    };
-
-    print('Data to send: $data');
-
-    // Save to SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_id', _chatIdController.text.trim());
-    await prefs.setString('fcm_token', _fcmToken ?? '');
-    await prefs.setString('device_id', _deviceId ?? '');
-    await prefs.setBool('is_registered', true);
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    // Navigate to next screen
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration completed successfully'),
-          backgroundColor: Colors.green,
-        ),
+    try {
+      // Register with API
+      print('=== Registering with API ===');
+      final response = await ApiService.registerUser(
+        chatId: _chatIdController.text.trim(),
+        fcmToken: _fcmToken!,
+        deviceId: _deviceId ?? 'unknown',
       );
       
-      // Navigate to Home Screen
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      print('API Response: $response');
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('chat_id', _chatIdController.text.trim());
+      await prefs.setString('fcm_token', _fcmToken ?? '');
+      await prefs.setString('device_id', _deviceId ?? '');
+      await prefs.setBool('is_registered', true);
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration completed successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Navigate to Home Screen
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      print('=== Registration Error ===');
+      print('Error: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
