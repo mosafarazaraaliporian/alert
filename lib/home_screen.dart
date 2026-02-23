@@ -57,9 +57,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await ApiService.deleteAlert(chatId: _chatId!, alertId: alertId);
       
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Alert deleted successfully'),
+        SnackBar(
+          content: const Text('Alert deleted'),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
       
@@ -67,8 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete alert: $e'),
+          content: Text('Failed to delete: $e'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -86,128 +90,279 @@ class _HomeScreenState extends State<HomeScreen> {
         systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          title: Text(
-            'Alert',
-            style: TextStyle(
-              color: isDark ? Colors.white : Colors.black,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          centerTitle: false,
-          actions: [
-            IconButton(
-              icon: Icon(
-                Icons.refresh,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-              onPressed: _loadAlerts,
-            ),
-          ],
-        ),
-        body: _isLoading
-            ? Center(
-                child: CircularProgressIndicator(
-                  color: Colors.deepPurple,
-                ),
-              )
-            : _alerts.isEmpty
-                ? Center(
-                    child: Text(
-                      'No alerts yet',
+        backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Alerts',
                       style: TextStyle(
-                        color: isDark ? Colors.white54 : Colors.black54,
-                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.black,
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
                       ),
                     ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadAlerts,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _alerts.length,
-                      itemBuilder: (context, index) {
-                        final alert = _alerts[index];
-                        final isAbove = alert['alert_type'] == 'above';
-                        
-                        return Card(
-                          color: isDark ? Colors.grey[900] : Colors.white,
-                          margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: Colors.deepPurple.withOpacity(0.3),
-                            ),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(16),
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.deepPurple,
-                              child: Icon(
-                                isAbove ? Icons.arrow_upward : Icons.arrow_downward,
-                                color: Colors.white,
-                              ),
-                            ),
-                            title: Text(
-                              alert['symbol'],
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                    IconButton(
+                      icon: Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.deepPurple,
+                        size: 28,
+                      ),
+                      onPressed: _loadAlerts,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Alert count
+              if (_alerts.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Text(
+                    '${_alerts.length} active ${_alerts.length == 1 ? 'alert' : 'alerts'}',
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : Colors.black54,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              
+              // Content
+              Expanded(
+                child: _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.deepPurple,
+                          strokeWidth: 3,
+                        ),
+                      )
+                    : _alerts.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Target: ${alert['target_price']}',
-                                  style: TextStyle(
-                                    color: isDark ? Colors.white70 : Colors.black87,
-                                    fontSize: 14,
-                                  ),
+                                Icon(
+                                  Icons.notifications_none_rounded,
+                                  size: 80,
+                                  color: isDark ? Colors.white24 : Colors.black12,
                                 ),
+                                const SizedBox(height: 16),
                                 Text(
-                                  alert['created_at'],
+                                  'No alerts yet',
                                   style: TextStyle(
                                     color: isDark ? Colors.white54 : Colors.black54,
-                                    fontSize: 12,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tap + to create your first alert',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white38 : Colors.black38,
+                                    fontSize: 15,
                                   ),
                                 ),
                               ],
                             ),
-                            trailing: IconButton(
-                              icon: Icon(
-                                Icons.delete,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => _deleteAlert(alert['id']),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadAlerts,
+                            color: Colors.deepPurple,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                              itemCount: _alerts.length,
+                              itemBuilder: (context, index) {
+                                final alert = _alerts[index];
+                                final isAbove = alert['alert_type'] == 'above';
+                                
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _buildAlertCard(alert, isAbove, isDark),
+                                );
+                              },
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () async {
-            final result = await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AddAlertScreen()),
-            );
-            if (result == true) {
-              _loadAlerts();
-            }
-          },
-          backgroundColor: Colors.deepPurple,
-          child: const Icon(
-            Icons.add,
-            color: Colors.white,
+              ),
+            ],
+          ),
+        ),
+        floatingActionButton: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF7B1FA2), Color(0xFF9C27B0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.deepPurple.withOpacity(0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(30),
+              onTap: () async {
+                final result = await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AddAlertScreen()),
+                );
+                if (result == true) {
+                  _loadAlerts();
+                }
+              },
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
           ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      ),
+    );
+  }
+
+  Widget _buildAlertCard(dynamic alert, bool isAbove, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: isDark 
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {},
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  // Icon
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isAbove
+                            ? [const Color(0xFF4CAF50), const Color(0xFF66BB6A)]
+                            : [const Color(0xFFFF5252), const Color(0xFFFF7043)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      isAbove ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  
+                  const SizedBox(width: 16),
+                  
+                  // Content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          alert['symbol'],
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              'Target: ',
+                              style: TextStyle(
+                                color: isDark ? Colors.white60 : Colors.black54,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              '${alert['target_price']}',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          alert['created_at'],
+                          style: TextStyle(
+                            color: isDark ? Colors.white38 : Colors.black38,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Delete button
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? Colors.red.withOpacity(0.15)
+                          : Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => _deleteAlert(alert['id']),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.red,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
