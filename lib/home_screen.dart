@@ -101,6 +101,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       await ApiService.deleteAlert(chatId: _chatId!, alertId: alertId);
       
+      // Remove only the deleted item from the list
+      setState(() {
+        _alerts.removeWhere((alert) => alert['id'] == alertId);
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Alert deleted'),
@@ -109,8 +114,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      
-      _loadAlerts();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
