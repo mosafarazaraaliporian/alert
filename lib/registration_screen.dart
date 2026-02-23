@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'dart:async';
 import 'home_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -22,19 +23,28 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   void initState() {
     super.initState();
+    print('=== Registration Screen InitState ===');
     _initializeData();
   }
 
   Future<void> _initializeData() async {
+    print('=== Starting Data Initialization ===');
     await _getFCMToken();
     await _getDeviceId();
+    print('=== Data Initialization Complete ===');
   }
 
   Future<void> _getFCMToken() async {
+    print('=== Getting FCM Token ===');
     try {
       final messaging = FirebaseMessaging.instance;
+      print('FirebaseMessaging instance created');
+      
+      // Check if Firebase is initialized
+      print('Checking Firebase initialization...');
       
       // Request permission first
+      print('Requesting notification permission...');
       final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
@@ -45,53 +55,78 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
-        // Get token
-        final fcmToken = await messaging.getToken();
+        // Get token with timeout
+        print('Getting FCM token...');
+        final fcmToken = await messaging.getToken().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            print('FCM Token request timed out');
+            return null;
+          },
+        );
+        
         print('FCM Token retrieved: $fcmToken');
         
-        setState(() {
-          _fcmToken = fcmToken;
-        });
-        
-        // Listen for token refresh
-        messaging.onTokenRefresh.listen((newToken) {
-          print('FCM Token refreshed: $newToken');
+        if (fcmToken != null) {
           setState(() {
-            _fcmToken = newToken;
+            _fcmToken = fcmToken;
           });
-        });
+          
+          // Listen for token refresh
+          messaging.onTokenRefresh.listen((newToken) {
+            print('FCM Token refreshed: $newToken');
+            setState(() {
+              _fcmToken = newToken;
+            });
+          });
+        } else {
+          print('FCM Token is null');
+          setState(() {
+            _fcmToken = 'Token is null - Check Google Play Services';
+          });
+        }
       } else {
         print('Notification permission denied');
         setState(() {
           _fcmToken = 'Permission denied';
         });
       }
-    } catch (e) {
-      print('Error getting FCM token: $e');
+    } catch (e, stackTrace) {
+      print('=== ERROR getting FCM token ===');
+      print('Error: $e');
+      print('StackTrace: $stackTrace');
       setState(() {
-        _fcmToken = 'Error: $e';
+        _fcmToken = 'Error: ${e.toString().substring(0, 50)}...';
       });
     }
   }
 
   Future<void> _getDeviceId() async {
+    print('=== Getting Device ID ===');
     try {
       final deviceInfo = DeviceInfoPlugin();
       String? deviceId;
       
       if (Platform.isAndroid) {
+        print('Platform: Android');
         final androidInfo = await deviceInfo.androidInfo;
         deviceId = androidInfo.id;
+        print('Android Device ID: $deviceId');
       } else if (Platform.isIOS) {
+        print('Platform: iOS');
         final iosInfo = await deviceInfo.iosInfo;
         deviceId = iosInfo.identifierForVendor;
+        print('iOS Device ID: $deviceId');
       }
       
       setState(() {
         _deviceId = deviceId;
       });
-    } catch (e) {
-      print('Error getting device ID: $e');
+      print('Device ID set successfully');
+    } catch (e, stackTrace) {
+      print('=== ERROR getting device ID ===');
+      print('Error: $e');
+      print('StackTrace: $stackTrace');
     }
   }
 

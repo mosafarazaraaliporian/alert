@@ -13,20 +13,27 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 void main() async {
+  print('=== App Starting ===');
   WidgetsFlutterBinding.ensureInitialized();
+  print('Flutter binding initialized');
   
   // Initialize Firebase
   try {
+    print('Initializing Firebase...');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    print('Firebase initialized successfully');
     
     // Set up background message handler
+    print('Setting up background message handler...');
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    print('Background handler set');
     
     // Request notification permissions
+    print('Requesting notification permissions...');
     final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(
+    final settings = await messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -35,15 +42,30 @@ void main() async {
       provisional: false,
       sound: true,
     );
+    print('Permission result: ${settings.authorizationStatus}');
     
     // Get FCM token
-    final token = await messaging.getToken();
-    print('FCM Token: $token');
+    print('Getting initial FCM token...');
+    try {
+      final token = await messaging.getToken().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('FCM Token request timed out in main');
+          return null;
+        },
+      );
+      print('Initial FCM Token: $token');
+    } catch (e) {
+      print('Error getting initial token: $e');
+    }
     
-  } catch (e) {
-    print('Firebase initialization error: $e');
+  } catch (e, stackTrace) {
+    print('=== Firebase initialization error ===');
+    print('Error: $e');
+    print('StackTrace: $stackTrace');
   }
   
+  print('=== Starting App ===');
   runApp(const MyApp());
 }
 
