@@ -32,12 +32,45 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   Future<void> _getFCMToken() async {
     try {
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      setState(() {
-        _fcmToken = fcmToken;
-      });
+      final messaging = FirebaseMessaging.instance;
+      
+      // Request permission first
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      
+      print('Permission status: ${settings.authorizationStatus}');
+      
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        // Get token
+        final fcmToken = await messaging.getToken();
+        print('FCM Token retrieved: $fcmToken');
+        
+        setState(() {
+          _fcmToken = fcmToken;
+        });
+        
+        // Listen for token refresh
+        messaging.onTokenRefresh.listen((newToken) {
+          print('FCM Token refreshed: $newToken');
+          setState(() {
+            _fcmToken = newToken;
+          });
+        });
+      } else {
+        print('Notification permission denied');
+        setState(() {
+          _fcmToken = 'Permission denied';
+        });
+      }
     } catch (e) {
       print('Error getting FCM token: $e');
+      setState(() {
+        _fcmToken = 'Error: $e';
+      });
     }
   }
 
