@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import 'add_alert_screen.dart';
 import 'api_service.dart';
 
@@ -11,21 +12,56 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<dynamic> _alerts = [];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   String? _chatId;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadAlerts();
+    _startAutoRefresh();
   }
 
-  Future<void> _loadAlerts() async {
-    setState(() {
-      _isLoading = true;
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // App came to foreground, refresh alerts
+      _loadAlerts();
+    }
+  }
+
+  void _startAutoRefresh() {
+    // Auto refresh every 30 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        _loadAlerts();
+      }
     });
+  }
+
+  Future<void> _loadAlerts({bool showRefreshing = false}) async {
+    // Don't show loading indicator if we already have data
+    if (_alerts.isEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+    } else if (showRefreshing) {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -33,20 +69,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (_chatId != null) {
         final alerts = await ApiService.getAlerts(_chatId!);
-        setState(() {
-          _alerts = alerts;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _alerts = alerts;
+            _isLoading = false;
+            _isRefreshing = false;
+          });
+        }
       } else {
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isRefreshing = false;
+          });
+        }
       }
     } catch (e) {
       print('Error loading alerts: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
     }
   }
 
@@ -110,13 +155,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         letterSpacing: -0.5,
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.refresh_rounded,
-                        color: Colors.deepPurple,
-                        size: 28,
-                      ),
-                      onPressed: _loadAlerts,
+                    Row(
+                      children: [
+                        if (_isRefreshing)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.deepPurple,
+                              ),
+                            ),
+                          ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.refresh_rounded,
+                            color: Colors.deepPurple,
+                            size: 28,
+                          ),
+                          onPressed: () => _loadAlerts(showRefreshing: true),
+                        ),
+                      ],
                     ),
                   ],
                 ),
