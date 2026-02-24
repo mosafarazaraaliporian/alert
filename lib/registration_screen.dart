@@ -41,9 +41,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final messaging = FirebaseMessaging.instance;
       print('FirebaseMessaging instance created');
       
-      // Check if Firebase is initialized
-      print('Checking Firebase initialization...');
-      
       // Request permission first
       print('Requesting notification permission...');
       final settings = await messaging.requestPermission(
@@ -56,19 +53,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
-        // Get token with timeout
+        // Get token with longer timeout
         print('Getting FCM token...');
         final fcmToken = await messaging.getToken().timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 30),
           onTimeout: () {
-            print('FCM Token request timed out');
+            print('FCM Token request timed out after 30 seconds');
             return null;
           },
         );
         
         print('FCM Token retrieved: $fcmToken');
         
-        if (fcmToken != null) {
+        if (fcmToken != null && fcmToken.isNotEmpty) {
           setState(() {
             _fcmToken = fcmToken;
           });
@@ -79,17 +76,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             setState(() {
               _fcmToken = newToken;
             });
+            // Update token on server
+            _updateTokenOnServer(newToken);
           });
         } else {
-          print('FCM Token is null');
+          print('FCM Token is null or empty');
           setState(() {
-            _fcmToken = 'Token is null - Check Google Play Services';
+            _fcmToken = 'unavailable';
           });
         }
       } else {
         print('Notification permission denied');
         setState(() {
-          _fcmToken = 'Permission denied';
+          _fcmToken = 'permission_denied';
         });
       }
     } catch (e, stackTrace) {
@@ -97,9 +96,35 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       print('Error: $e');
       print('StackTrace: $stackTrace');
       setState(() {
-        _fcmToken = 'Error: ${e.toString().substring(0, 50)}...';
+        _fcmToken = 'error';
       });
     }
+  }
+
+  Future<void> _updateTokenOnServer(String newToken) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final chatId = prefs.getString('chat_id');
+      final deviceId = _deviceId;
+      
+      if (chatId != null && deviceId != null) {
+        await ApiService.registerUser(
+          chatId: chatId,
+          fcmToken: newToken,
+          deviceId: deviceId,
+        );
+        print('✅ Token updated on server');
+      }
+    } catch (e) {
+      print('⚠️ Failed to update token on server: $e');
+    }
+  }
+
+  Future<void> _retryGetToken() async {
+    setState(() {
+      _fcmToken = null;
+    });
+    await _getFCMToken();
   }
 
   Future<void> _getDeviceId() async {
@@ -142,13 +167,53 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
-    if (_fcmToken == null || _fcmToken!.contains('Error')) {
+    // Check FCM token status
+    if (_fcmToken == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('FCM Token not available. Please restart the app.'),
-          backgroundColor: Colors.red,
+          content: Text('Please wait, getting notification token...'),
+          backgroundColor: Colors.orange,
         ),
       );
+      return;
+    }
+
+    if (_fcmToken == 'error' || _fcmToken == 'unavailable') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please click Retry to get notification token'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (_fcmToken == 'permission_denied') {
+      final shouldContinue = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Notification Permission Required'),
+          content: const Text(
+            'This app needs notification permission to send you alerts. Please enable notifications in your device settings and try again.'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+                _retryGetToken();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+      
+      if (shouldContinue != true) return;
       return;
     }
 
@@ -170,7 +235,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       // Save to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('chat_id', _chatIdController.text.trim());
-      await prefs.setString('fcm_token', _fcmToken ?? '');
+      await prefs.setString('fcm_token', _fcmToken!);
       await prefs.setString('device_id', _deviceId ?? '');
       await prefs.setBool('is_registered', true);
 
@@ -288,18 +353,53 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                               color: isDark ? Colors.white : Colors.black,
                             ),
                           ),
+                          const Spacer(),
+                          if (_fcmToken == 'error' || _fcmToken == 'unavailable')
+                            TextButton.icon(
+                              onPressed: _retryGetToken,
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Retry'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.deepPurple,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _fcmToken ?? 'Loading...',
+                        _fcmToken == null 
+                            ? 'Loading...'
+                            : _fcmToken == 'error'
+                                ? '⚠️ Error getting token'
+                                : _fcmToken == 'unavailable'
+                                    ? '⚠️ Token unavailable'
+                                    : _fcmToken == 'permission_denied'
+                                        ? '⚠️ Permission denied'
+                                        : _fcmToken!.length > 50
+                                            ? '${_fcmToken!.substring(0, 50)}...'
+                                            : _fcmToken!,
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? Colors.white70 : Colors.black54,
+                          color: _fcmToken == 'error' || _fcmToken == 'unavailable' || _fcmToken == 'permission_denied'
+                              ? Colors.orange
+                              : isDark ? Colors.white70 : Colors.black54,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (_fcmToken == 'error' || _fcmToken == 'unavailable' || _fcmToken == 'permission_denied')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '⚠️ Click Retry button to get notification token. Required for push notifications.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.red,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
